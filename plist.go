@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/xml"
-	"errors"
 	"io"
 	"strconv"
 	"strings"
@@ -22,7 +21,9 @@ func Read(r io.Reader) (interface{}, error) {
 	}
 	_, root, err := next(p) // root
 	if err != nil {
-		return nil, err
+		if err != io.EOF {
+			return nil, err
+		}
 	}
 	return root, nil
 }
@@ -54,12 +55,15 @@ type valueNode struct {
 }
 
 func next(p *xml.Decoder) (xml.Name, interface{}, error) {
-	se, e := nextStart(p)
+	sei, e := nextStart(p)
 	if e != nil {
 		return xml.Name{}, nil, e
 	}
+	if _, ok := sei.(xml.EndElement); ok {
+		return xml.Name{}, nil, nil
+	}
+	se := sei.(xml.StartElement)
 
-	var nv interface{}
 	switch se.Name.Local {
 	case "string":
 		var s string
@@ -73,11 +77,11 @@ func next(p *xml.Decoder) (xml.Name, interface{}, error) {
 		return xml.Name{}, false, e
 	case "integer":
 		var s string
-		var i int
+		var i int64
 		if e = p.DecodeElement(&s, &se); e != nil {
 			return xml.Name{}, nil, e
 		}
-		i, e = strconv.Atoi(strings.TrimSpace(s))
+		i, e = strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 		return xml.Name{}, i, e
 	case "double":
 		var s string
@@ -99,34 +103,34 @@ func next(p *xml.Decoder) (xml.Name, interface{}, error) {
 		if e = p.DecodeElement(&s, &se); e != nil {
 			return xml.Name{}, nil, e
 		}
+		s = strings.TrimSpace(s)
+		s = strings.Replace(s, "\t", "", -1)
+		s = strings.Replace(s, "\n", "", -1)
+		s = strings.Replace(s, "\r", "", -1)
 		if b, e := base64.StdEncoding.DecodeString(s); e != nil {
 			return xml.Name{}, nil, e
 		} else {
 			return xml.Name{}, b, nil
 		}
-	case "value":
-		_, e = nextStart(p)
-		if e != nil {
-			return xml.Name{}, nil, e
-		}
-		return next(p)
-	case "name":
-		_, e = nextStart(p)
-		if e != nil {
-			return xml.Name{}, nil, e
-		}
-		return next(p)
 	case "dict":
 		st := Dict{}
-
+		n := 0
 		for e == nil {
-			se, e = nextStart(p)
+			// key
+			sei, e = nextStart(p)
 			if e != nil {
 				break
 			}
-			if se.Name.Local != "key" {
-				return xml.Name{}, nil, errors.New("invalid key")
+			if ee, ok := sei.(xml.EndElement); ok {
+				switch ee.Name.Local {
+				case "true":
+					continue
+				case "false":
+					continue
+				}
+				break
 			}
+			se := sei.(xml.StartElement)
 			var key string
 			if e = p.DecodeElement(&key, &se); e != nil {
 				return xml.Name{}, nil, e
@@ -135,36 +139,30 @@ func next(p *xml.Decoder) (xml.Name, interface{}, error) {
 			// value
 			var value interface{}
 			_, value, e = next(p)
-			if e != nil {
-				break
-			}
 			st[key] = value
+			n++
 		}
-		return xml.Name{}, st, nil
+		return xml.Name{}, st, e
 	case "array":
 		ar := Array{}
-
 		for {
-			_, e = nextStart(p)
-			if e != nil {
-				break
-			}
 			_, value, e := next(p)
 			if e != nil {
-				break
+				return xml.Name{}, ar, e
 			}
 			ar = append(ar, value)
 		}
 		return xml.Name{}, ar, nil
 	}
 
-	if e = p.DecodeElement(nv, &se); e != nil {
+	var nv interface{}
+	if e = p.DecodeElement(&nv, &se); e != nil {
 		return xml.Name{}, nil, e
 	}
 	return se.Name, nv, e
 }
 
-func nextStart(p *xml.Decoder) (xml.StartElement, error) {
+func nextStart(p *xml.Decoder) (interface{}, error) {
 	for {
 		t, e := p.Token()
 		if e != nil {
@@ -172,6 +170,8 @@ func nextStart(p *xml.Decoder) (xml.StartElement, error) {
 		}
 		switch t := t.(type) {
 		case xml.StartElement:
+			return t, nil
+		case xml.EndElement:
 			return t, nil
 		}
 	}
