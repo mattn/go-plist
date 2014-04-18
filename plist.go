@@ -125,7 +125,7 @@ func next(p *xml.Decoder) (xml.Name, interface{}, error) {
 				break
 			}
 			if se.Name.Local != "key" {
-				return xml.Name{}, nil, errors.New("invalid key ")
+				return xml.Name{}, nil, errors.New("invalid key")
 			}
 			var key string
 			if e = p.DecodeElement(&key, &se); e != nil {
