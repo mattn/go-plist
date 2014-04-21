@@ -28,7 +28,7 @@ func main() {
 	}
 
 	var name string
-	err = scan.ScanTree(tree, `/Tracks/"480"/Name`, &name)
+	err = scan.ScanTree(tree, `/Tracks/480/Name`, &name)
 	if err != nil {
 		log.Fatal(err)
 	}
