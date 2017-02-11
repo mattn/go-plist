@@ -123,6 +123,9 @@ func next(p *xml.Decoder) (xml.Name, interface{}, error) {
 			if e != nil {
 				return xml.Name{}, ar, e
 			}
+			if value == nil {
+				break
+			}
 			ar = append(ar, value)
 		}
 		return xml.Name{}, ar, nil
