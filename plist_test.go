@@ -1,6 +1,7 @@
 package plist
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -33,7 +34,39 @@ func TestSimple(t *testing.T) {
 	if !ok {
 		t.Fatal("should be array")
 	}
-	if len(a) == 0 {
-		t.Fatal("should not be empty")
+	if len(a) != 1 {
+		t.Fatal("should have 1 child")
+	}
+	v = a[0]
+	d, ok := v.(Dict)
+	if !ok {
+		t.Fatal("should have dict")
+	}
+	if len(d) != 1 {
+		t.Fatal("should have 1 key")
+	}
+	key := ""
+	for k, _ := range d {
+		key = k
+		break
+	}
+	if key != "_SPCommandLineArguments" {
+		t.Fatal("key should be _SPCommandLineArguments")
+	}
+	v, ok = d[key]
+	if !ok {
+		t.Fatal("dict should have value")
+	}
+	a, ok = v.(Array)
+	if !ok {
+		t.Fatal("should be array")
+	}
+	if len(a) != 6 {
+		t.Fatal("should have 6 children")
+	}
+	for i, s := range []string{"/usr/sbin/system_profiler", "-nospawn", "-xml", "SPPowerDataType", "-detailLevel", "full"} {
+		if !reflect.DeepEqual(a[i], s) {
+			t.Fatalf("a[%d] should be %v", i, s)
+		}
 	}
 }
